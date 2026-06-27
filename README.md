@@ -57,5 +57,5 @@ Other AI agents can reuse the same registry format and CLI by pointing the insta
 
 可以的话可以赞赏一下吗喵
 
-![赞助码](./github-sponsor-qrcode-simple.png)
+<img width="700" height="340" alt="490f26c0699115961e7de5031710890e" src="https://github.com/user-attachments/assets/8978e2a0-9a92-477c-a9b9-42e0b3c05ae5" />
 
