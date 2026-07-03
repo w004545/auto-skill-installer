@@ -55,9 +55,7 @@ Other AI agents can reuse the same registry format and CLI by pointing the insta
 
 其他 AI 智能体可以复用同样的 registry 格式和 CLI，并通过 `--dest` 指向自己的技能目录。
 
-可以的话可以赞赏一下吗喵
 
-<img width="1456" height="1080" alt="download" src="https://github.com/user-attachments/assets/6d69d203-0e65-4817-9386-14e2131aacfd" />
 
 
 
