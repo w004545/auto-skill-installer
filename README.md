@@ -1,3 +1,12 @@
+╔══════════════════════════════════════════════════════════╗
+║  🤖 AI 定制项目接单中  ·  有需求直接进频道聊              ║
+║  👉 https://t.me/+heFGdl5IodFjMDll                       ║
+╚══════════════════════════════════════════════════════════╝
+
+
+
+
+
 # Auto Skill Installer / AI 技能自动安装器
 
 `auto-skill-installer` is an open-source skill discovery and installation helper for AI agents. It helps an agent notice when it needs another capability, search local folders plus GitHub-based registries, and install the best matching skill into the target agent's skills directory.
