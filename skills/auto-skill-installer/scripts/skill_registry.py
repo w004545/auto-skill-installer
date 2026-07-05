@@ -63,25 +63,67 @@ class RegistryError(RuntimeError):
     """Raised for recoverable registry failures."""
 
 
+# ── Platform auto-detection ──────────────────────────────────────────────
+# Auto-skill-installer now supports multiple AI agent platforms.
+# Priority: 1) PROMASKILLS_HOME (Proma)  2) CODEX_HOME (Codex)  3) fallback
+
+
+def proma_workspace_root() -> Path | None:
+    """Detect the active Proma workspace skills directory."""
+    # Check explicit env var first
+    env = os.environ.get("PROMASKILLS_HOME")
+    if env:
+        return Path(env).expanduser()
+
+    # Auto-detect the default Proma workspace
+    candidate = Path.home() / ".proma" / "agent-workspaces" / "default" / "skills"
+    if candidate.exists():
+        return candidate
+
+    # Scan for any existing Proma workspace with a skills dir
+    workspaces = Path.home() / ".proma" / "agent-workspaces"
+    if workspaces.exists():
+        for ws in workspaces.iterdir():
+            skills_dir = ws / "skills"
+            if skills_dir.is_dir():
+                return skills_dir
+    return None
+
+
 def codex_home() -> Path:
     return Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
 
 
 def skills_root() -> Path:
+    proma = proma_workspace_root()
+    if proma:
+        return proma
     return codex_home() / "skills"
 
 
 def user_sources_path() -> Path:
+    proma_cfg = Path.home() / ".proma" / "agent-workspaces" / "default"
+    if proma_cfg.exists():
+        return proma_cfg / "auto-skill-installer" / "sources.json"
     return codex_home() / "auto-skill-installer" / "sources.json"
 
 
 def local_skill_roots() -> list[Path]:
     home = Path.home()
-    return [
+    roots: list[Path] = [
         skills_root(),
         codex_home() / "skills" / ".system",
         home / ".agents" / "skills",
+        home / ".proma" / "agent-workspaces" / "default" / "skills",
     ]
+    # Also scan .proma workspaces for skill dirs at various known locations
+    for ws_parent in [home / ".proma" / "agent-workspaces"]:
+        if ws_parent.exists():
+            for ws in ws_parent.iterdir():
+                for candidate in [ws / "skills", ws / ".context" / "skills"]:
+                    if candidate.is_dir() and candidate not in roots:
+                        roots.append(candidate)
+    return [r for r in roots if r.exists()]
 
 
 def built_in_sources_path() -> Path:

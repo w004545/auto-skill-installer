@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "auto-skill-installer": {
+      "command": "python",
+      "args": [
+        "PATH_TO/skills/auto-skill-installer/scripts/mcp_server.py"
+      ],
+      "description": "AI Agent skill installer — auto search and install skills at runtime"
+    }
+  }
+}

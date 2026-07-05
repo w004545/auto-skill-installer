@@ -1,73 +1,178 @@
-╔══════════════════════════════════════════════════════════╗
-║  🤖 AI 定制项目接单中  ·  有需求直接进频道聊              ║
-║  👉 https://t.me/+heFGdl5IodFjMDll                       ║
-╚══════════════════════════════════════════════════════════╝
-
-
-
-
-
 # Auto Skill Installer / AI 技能自动安装器
 
-`auto-skill-installer` is an open-source skill discovery and installation helper for AI agents. It helps an agent notice when it needs another capability, search local folders plus GitHub-based registries, and install the best matching skill into the target agent's skills directory.
+**Enable AI agents to autonomously discover and install missing skills at runtime.**
 
-`auto-skill-installer` 是一个面向 AI 智能体的开源技能发现与安装助手。它可以让智能体在工作中发现自己缺少某项能力时，自动搜索本地 skills 和 GitHub 技能仓库，并把最匹配的 skill 安装到目标智能体的技能目录中。
+This is a **fork** of [lingbol088-spec/auto-skill-installer](https://github.com/lingbol088-spec/auto-skill-installer) with two key additions:
 
-The current implementation is compatible with Codex by default and installs into `$CODEX_HOME/skills`, while the registry model and CLI are designed to be reused by other agent runtimes.
+1. **MCP Server** — Exposes skill search/install as standard MCP tools so any MCP-compatible agent can call them
+2. **Auto-Trigger Protocol** — Agents proactively detect capability gaps and install matching skills without user prompting
 
-当前实现默认兼容 Codex，并安装到 `$CODEX_HOME/skills`；同时，技能仓库格式和命令行工具也面向其他智能体运行环境设计。
+---
 
-## What It Does / 功能
+## Architecture
 
-- Searches already installed skills before going to the network
-- Reads configured GitHub skill registries and ranks likely matches
-- Installs a remote skill only when the selected directory contains `SKILL.md`
-- Lets you add your own organization or personal skill registry
-- Uses Codex as the default install target, but keeps the registry and CLI agent-friendly
-
-- 先搜索已经安装的本地 skills，再访问远程仓库
-- 读取已配置的 GitHub skill registries，并按匹配度排序
-- 只安装包含 `SKILL.md` 的有效 skill 目录
-- 支持添加团队、组织或个人维护的技能仓库
-- 默认安装目标是 Codex，但仓库格式和 CLI 可扩展到其他智能体
-
-## Layout / 项目结构
-
-- `skills/auto-skill-installer/`: installable skill / 可安装的 skill
-- `skills/auto-skill-installer/scripts/auto_install.py`: CLI entry point / 命令行入口
-- `skills/auto-skill-installer/assets/registry-sources.json`: bundled default registries / 默认远程源配置
-
-## Quick Start / 快速开始
-
-```powershell
-python skills/auto-skill-installer/scripts/auto_install.py search --need "figma design generation"
-python skills/auto-skill-installer/scripts/auto_install.py ensure --need "github pull request review comments" --force
-python skills/auto-skill-installer/scripts/auto_install.py add-source --name my-team --repo your-org/agent-skills --path skills
+```
+┌──────────────────────────────────────────────────────┐
+│                    AI Agent                           │
+│  (Proma, Codex, Claude Code, etc.)                    │
+│                                                       │
+│  Detects gap → calls MCP tools → skill installed ✓    │
+└──────────────────────┬───────────────────────────────┘
+                       │ MCP stdio
+┌──────────────────────▼───────────────────────────────┐
+│              MCP Server (mcp_server.py)                │
+│                                                       │
+│  search_skills │ ensure_skill │ list_installed        │
+│  add_source    │ remove_source│ list_sources           │
+└──────────────────────┬───────────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────────┐
+│         Core Engine (skill_registry.py)               │
+│                                                       │
+│  Local scan → GitHub API → score → install → verify   │
+└──────────────────────────────────────────────────────┘
 ```
 
-## Manual Install for Codex / Codex 手动安装
+---
 
-For Codex, copy `skills/auto-skill-installer` into your local Codex skills directory.
+## What It Does
 
-如果用于 Codex，把 `skills/auto-skill-installer` 安装到你的本地 Codex skills 目录：
+- **Searches local skills** before hitting the network (avoids re-download)
+- **Reads configured GitHub registries**, ranks matches by token scoring
+- **Installs** only when the candidate directory contains `SKILL.md`
+- **Supports multiple agent platforms**: Proma, Codex, and any MCP-compatible runtime
+- **Auto-triggers** when the agent detects a capability gap at runtime
 
-```powershell
-$dest = Join-Path $HOME ".codex\\skills\\auto-skill-installer"
-Copy-Item -Recurse -LiteralPath ".\\skills\\auto-skill-installer" -Destination $dest
+---
+
+## MCP Server
+
+The MCP server exposes 6 tools for AI agent consumption:
+
+| Tool | Description |
+|------|-------------|
+| `search_skills(need, limit)` | Search local + remote for matching skills |
+| `ensure_skill(need, force)` | Search and install the best match |
+| `list_installed_skills()` | List all locally installed skills |
+| `list_sources()` | List configured registries |
+| `add_source(name, repo, path, ref)` | Add a custom registry |
+| `remove_source(name)` | Remove a user-added source |
+
+### Start the server
+
+```bash
+python scripts/mcp_server.py
 ```
 
-Restart Codex after installing new skills so they are auto-discovered.
+All tools return structured JSON. No restart needed after installation.
 
-安装新 skill 后，请重启 Codex，让它自动发现新技能。
+---
 
-Other AI agents can reuse the same registry format and CLI by pointing the install destination at their own skills directory with `--dest`.
+## Auto-Trigger Protocol
 
-其他 AI 智能体可以复用同样的 registry 格式和 CLI，并通过 `--dest` 指向自己的技能目录。
+The included `SKILL.md` instructs the agent to:
 
+1. **Detect** — when a task needs capabilities outside installed skills
+2. **Search** — call `search_skills()` with extracted capability terms
+3. **Install** — call `ensure_skill()` when match confidence is high
+4. **Continue** — use the new skill and inform the user
 
+No explicit user invocation required — the agent acts proactively.
 
+---
 
+## Quick Start
 
+### For Proma
 
+1. **Install dependencies** (if not already present):
 
+```bash
+pip install fastmcp>=3.0.0
+```
 
+2. **Register the MCP server** — add to your Proma workspace `mcp.json`:
+
+```json
+{
+  "servers": {
+    "auto-skill-installer": {
+      "command": "python",
+      "args": ["path/to/skills/auto-skill-installer/scripts/mcp_server.py"],
+      "description": "Search and install AI agent skills at runtime"
+    }
+  }
+}
+```
+
+3. **Copy the skill** into your agent's skills directory:
+
+```bash
+cp -r skills/auto-skill-installer ~/.proma/agent-workspaces/default/skills/
+```
+
+4. Restart your agent. The MCP tools are now available.
+
+### CLI (standalone)
+
+```bash
+python scripts/auto_install.py search --need "figma design generation"
+python scripts/auto_install.py ensure --need "github pull request review" --force
+python scripts/auto_install.py add-source --name my-team --repo your-org/agent-skills --path skills
+```
+
+---
+
+## Platform Support
+
+| Platform | Auto-detect | Default install path |
+|----------|-------------|---------------------|
+| **Proma** (auto) | `PROMASKILLS_HOME` env, or `~/.proma/agent-workspaces/*/skills` | Proma workspace skills dir |
+| **Codex** | `CODEX_HOME` env, or `~/.codex/skills` | `$CODEX_HOME/skills` |
+| **Custom** | Set `PROMASKILLS_HOME` or `CODEX_HOME` | As specified |
+
+---
+
+## Layout
+
+```
+auto-skill-installer/
+├── README.md
+├── LICENSE
+├── requirements.txt                  # Python deps (fastmcp)
+├── example-proma-mcp-config.json     # Example MCP config for Proma
+└── skills/auto-skill-installer/
+    ├── SKILL.md                      ← Auto-Trigger protocol
+    ├── scripts/
+    │   ├── auto_install.py           # CLI entry point
+    │   ├── skill_registry.py         # Core engine
+    │   └── mcp_server.py             # ★ NEW: MCP server
+    ├── assets/
+    │   └── registry-sources.json     # Default registries
+    ├── agents/
+    │   └── openai.yaml
+    └── references/
+        └── source-format.md
+```
+
+---
+
+## Registry Sources
+
+Pre-configured default: `openai/skills` curated set.
+
+Add your own:
+
+```bash
+# CLI
+python scripts/auto_install.py add-source --name my-org --repo your-org/agent-skills --path skills
+
+# Or via MCP tool
+mcp call add_source --arguments '{"name":"my-org","repo":"your-org/agent-skills","path":"skills"}'
+```
+
+---
+
+## License
+
+MIT
