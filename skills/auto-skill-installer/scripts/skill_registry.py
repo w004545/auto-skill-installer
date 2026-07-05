@@ -110,20 +110,26 @@ def user_sources_path() -> Path:
 
 def local_skill_roots() -> list[Path]:
     home = Path.home()
-    roots: list[Path] = [
-        skills_root(),
-        codex_home() / "skills" / ".system",
-        home / ".agents" / "skills",
-        home / ".proma" / "agent-workspaces" / "default" / "skills",
-    ]
-    # Also scan .proma workspaces for skill dirs at various known locations
-    for ws_parent in [home / ".proma" / "agent-workspaces"]:
-        if ws_parent.exists():
-            for ws in ws_parent.iterdir():
-                for candidate in [ws / "skills", ws / ".context" / "skills"]:
-                    if candidate.is_dir() and candidate not in roots:
-                        roots.append(candidate)
-    return [r for r in roots if r.exists()]
+    roots: list[Path] = []
+    seen: set[Path] = set()
+
+    def add(root: Path) -> None:
+        resolved = root.resolve()
+        if root.exists() and resolved not in seen:
+            seen.add(resolved)
+            roots.append(root)
+
+    add(skills_root())
+    add(codex_home() / "skills" / ".system")
+    add(home / ".agents" / "skills")
+
+    # Auto-scan all .proma workspace skill directories
+    ws_parent = home / ".proma" / "agent-workspaces"
+    if ws_parent.exists():
+        for ws in sorted(ws_parent.iterdir()):
+            add(ws / "skills")
+
+    return roots
 
 
 def built_in_sources_path() -> Path:
@@ -253,10 +259,15 @@ def _iter_skill_dirs(root: Path) -> Iterable[Path]:
 
 def local_candidates() -> list[SkillCandidate]:
     candidates: list[SkillCandidate] = []
+    seen: set[str] = set()
     for root in local_skill_roots():
         for skill_dir in _iter_skill_dirs(root):
             text = (skill_dir / "SKILL.md").read_text(encoding="utf-8", errors="ignore")
             name, description = parse_frontmatter(text)
+            key = name or skill_dir.name
+            if key in seen:
+                continue
+            seen.add(key)
             candidate = SkillCandidate(
                 name=name or skill_dir.name,
                 description=description,
